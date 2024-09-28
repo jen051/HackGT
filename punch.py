@@ -3,7 +3,11 @@ import mediapipe as mp
 import numpy as np
 import time
 import threading
+from fastapi import FastAPI, Response
+import uvicorn
+import streamlit as st
 
+app = FastAPI()
 buffer_elapsed = False
 
 def timer_buffer(seconds):
@@ -29,33 +33,24 @@ def detect_pose_live():
     pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
     pass_count = 1
     cap = cv2.VideoCapture(0)
-    
+    stframe = st.empty()
     while cap.isOpened():
-        # read frame
-        _, frame = cap.read()
+        ret, frame = cap.read()
         try:
-            # convert to RGB
-            print(buffer_elapsed)
+            if not ret:
+                break
             if pass_count < 6:
-                # timer = time.time()
                 if practice_loop(frame, pose, pass_count) and buffer_elapsed:
                     pass_count += 1
                     timer_buffer(5)
-                # pass_count = practice_loop(frame, pose, mp_pose, mp_drawing, pass_count)
-                cv2.putText(frame, str(pass_count-1), (200, 200), cv2.FONT_HERSHEY_COMPLEX,4, (255,255,255),2, cv2.LINE_8)
+                cv2.putText(frame, str(pass_count-1), (30, 450), cv2.FONT_HERSHEY_SIMPLEX,3, (0,128,0),8, cv2.LINE_AA)
                 
-                # draw skeleton on the frame
                 mp_drawing.draw_landmarks(frame, pose.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).pose_landmarks, mp_pose.POSE_CONNECTIONS)
-                # display the frame
-            
-            # cv2.putText(frame, "yippee", (200, 200), cv2.FONT_HERSHEY_COMPLEX,1, (0,0,0),2, cv2.LINE_8)
-            cv2.imshow('Output', frame)
-            
+                stframe.image(frame, channels="BGR")
+            else:
+                break  
         except Exception as e:
             print(f"Error: {e}")
-            break
-            
-        if cv2.waitKey(1) == ord('q'):
             break
 
     cap.release()
@@ -64,11 +59,7 @@ def detect_pose_live():
 def compare_angle_sequences(live, standing):
     if not live or not standing:
         return 0.0
-    # print(live)
     accuracy = 0
-    # for i in range(0, len(live), 8):
-    #     accuracy = (1 - (compute_mse(standing,live[len(live)-8:len(live)]))/(180**2))*100
-
     if(len(live)>0):
         if(len(live)%8 == 0):
             accuracy = (1 - (compute_mse(standing,live[len(live)-8:len(live)]))/(90**2))*100
@@ -81,9 +72,7 @@ def detect_punch_stance(image_path):
     pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
     image = cv2.imread(image_path)
-    # convert to RGB
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    # process the image for pose detection
     pose_results = pose.process(image_rgb)
 
     relevant_results = pose_results.pose_landmarks.landmark
@@ -93,11 +82,7 @@ def detect_punch_stance(image_path):
         z = lndmrk.z
         punch_stance_sequence.append([x, y, z])
     find_angle_sequence(punch_stance_sequence, punch_stance_angle_sequence)
-    # draw skeleton on the image
     mp_drawing.draw_landmarks(image, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-    # cv2.imshow('Output', image)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
     
 def detect_punch(image_path):
     mp_drawing = mp.solutions.drawing_utils
@@ -105,9 +90,7 @@ def detect_punch(image_path):
     pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
     image = cv2.imread(image_path)
-    # convert to RGB
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    # process the image for pose detection
     pose_results = pose.process(image_rgb)
 
     relevant_results = pose_results.pose_landmarks.landmark
@@ -117,15 +100,10 @@ def detect_punch(image_path):
         z = lndmrk.z
         punch_sequence.append([x, y, z])
     find_angle_sequence(punch_sequence, punch_angle_sequence)
-    # draw skeleton on the image
     mp_drawing.draw_landmarks(image, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-    # cv2.imshow('Output', image)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
 
 def find_angle_sequence(sequence, angle_sequence):
     mp_pose = mp.solutions.pose
-    # print(sequence)
     right_forearm_1416 = compute_vector_difference(sequence[mp_pose.PoseLandmark.RIGHT_WRIST.value], sequence[mp_pose.PoseLandmark.RIGHT_ELBOW.value])
     right_upper_arm_1214 = compute_vector_difference(sequence[mp_pose.PoseLandmark.RIGHT_ELBOW.value], sequence[mp_pose.PoseLandmark.RIGHT_SHOULDER.value])
     right_body_1224 = compute_vector_difference(sequence[mp_pose.PoseLandmark.RIGHT_ELBOW.value], sequence[mp_pose.PoseLandmark.RIGHT_SHOULDER.value])
@@ -161,7 +139,6 @@ def compute_vector_difference(final, initial):
     
 def compute_angle(vector1, vector2):
     angle = np.degrees(np.arccos(np.dot(vector1,vector2)/(np.linalg.norm(vector1)*np.linalg.norm(vector2))))
-    # print(angle)
     return angle
 
 def compute_mse(ref_angles, live_angles):
@@ -176,9 +153,18 @@ def compute_mse(ref_angles, live_angles):
         sum += dif
     return sum/8
 
+step_one_passed = False
+
+def update_step_one_status(value):
+    global step_one_passed
+    step_one_passed = value
+
+def get_step_one_status():
+    global step_one_passed
+    return step_one_passed
+    
 def practice_loop(live_video, pose, pass_count): 
     if pass_count < 6:
-
         frame_rgb = cv2.cvtColor(live_video, cv2.COLOR_BGR2RGB)            
         pose_results = pose.process(frame_rgb)
         if pose_results.pose_landmarks:
@@ -201,37 +187,28 @@ def practice_loop(live_video, pose, pass_count):
                 accuracy = compare_angle_sequences(live_angle_sequence, punch_stance_angle_sequence)
                 if not np.isnan(accuracy):
                     # print(f"Accuracy: {accuracy:.2f}%")
-                    cv2.putText(live_video, f"{accuracy:.2f}%", (100, 100), cv2.FONT_HERSHEY_COMPLEX,4, (0,0,0),2, cv2.LINE_8)
+                    # cv2.putText(live_video, f"{accuracy:.2f}%", (100, 100), cv2.FONT_HERSHEY_SIMPLEX,1, (0,0,0),2, cv2.LINE_AA)
                     # print(time.time()-timer)
-                    if accuracy > 95:
-                        cv2.putText(live_video, "now punch!", (200, 100), cv2.FONT_HERSHEY_COMPLEX,4, (0,0,0),2, cv2.LINE_8)
+                    if (accuracy > 90 and buffer_elapsed) or get_step_one_status():
+                        cv2.putText(live_video, "now punch!", (30, 100), cv2.FONT_HERSHEY_SIMPLEX,1, (0,0,255),2, cv2.LINE_AA)
                         accuracy = compare_angle_sequences(live_angle_sequence, punch_angle_sequence)
-                        cv2.putText(live_video, f"{accuracy:.2f}%", (100, 100), cv2.FONT_HERSHEY_COMPLEX,4, (0,0,0),2, cv2.LINE_8)
-                        
-                        if accuracy > 95:
+                        cv2.putText(live_video, f"Accuracy: {accuracy:.2f}%", (30, 40), cv2.FONT_HERSHEY_SIMPLEX,1, (0,0,0),4, cv2.LINE_AA)
+                        # cv2.putText(live_video, f"{accuracy:.2f}%", (100, 100), cv2.FONT_HERSHEY_COMPLEX,4, (0,0,0),2, cv2.LINE_8)
+                        update_step_one_status(True)
+                        if accuracy > 96:
+                            cv2.putText(live_video, f"Accuracy: {accuracy:.2f}%", (30, 40), cv2.FONT_HERSHEY_SIMPLEX,1, (0,128,0),4, cv2.LINE_AA)
                             pass_count += 1
+                            update_step_one_status(False)
                             return True
-                
-            # cv2.putText(live_video, str(pass_count), (200, 200), cv2.FONT_HERSHEY_COMPLEX,1, (255,0,0),2, cv2.LINE_8)
-                    
-            #     # draw skeleton on the frame
-            # mp_drawing.draw_landmarks(live_video, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-            # # display the frame
-            # cv2.imshow('Output', live_video)
+                        else:
+                            cv2.putText(live_video, f"Accuracy: {accuracy:.2f}%", (30, 40), cv2.FONT_HERSHEY_SIMPLEX,1, (0,0,0),4, cv2.LINE_AA)
+                    else:
+                        cv2.putText(live_video, f"Accuracy: {accuracy:.2f}%", (30, 40), cv2.FONT_HERSHEY_SIMPLEX,1, (0,0,0),4, cv2.LINE_AA)
+                else:
+                    cv2.putText(live_video, f"Accuracy: {0}%", (30, 40), cv2.FONT_HERSHEY_SIMPLEX,1, (0,0,0),4, cv2.LINE_AA)
     return False
     
-
-
-if __name__ == '__main__':
-    # detect_pose_video('IMG_6999.mov')
-    detect_punch_stance('punch_stance.jpg')
-    detect_punch('punch.jpg')
-    
-    # print(len(standing_pose_sequence))
-    # wait_time = 1
-    # for i in range(3):
-    #     time.sleep(wait_time)
-    #     print(f"Waited for {wait_time * (i + 1)} seconds")
-    detect_pose_live()
-
-    
+timer_buffer(1)
+detect_punch('punch.jpg')
+detect_punch_stance('punch_stance.jpg')
+detect_pose_live()

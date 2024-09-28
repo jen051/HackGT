@@ -45,7 +45,7 @@ def detect_pose_live():
                 if practice_loop(frame, pose, mp_pose, mp_drawing, pass_count) and buffer_elapsed:
                     pass_count += 1
                     timer_buffer(5)
-                cv2.putText(frame, str(pass_count-1), (200, 200), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2, cv2.LINE_8)
+                cv2.putText(frame, str(pass_count-1), (30, 450), cv2.FONT_HERSHEY_SIMPLEX,3, (0,128,0),8, cv2.LINE_AA)
                 
                 mp_drawing.draw_landmarks(frame, pose.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).pose_landmarks, mp_pose.POSE_CONNECTIONS)
                 stframe.image(frame, channels="BGR")
@@ -162,10 +162,14 @@ def practice_loop(live_video, pose, mp_pose, mp_drawing, pass_count):
                 # Compare live_angle_sequence with standing_angle_sequence
                 accuracy = compare_angle_sequences(live_angle_sequence, standing_angle_sequence)
                 if not np.isnan(accuracy):
-                    cv2.putText(live_video, f"{accuracy:.2f}%", (100, 100), cv2.FONT_HERSHEY_COMPLEX,4, (0,0,0),2, cv2.LINE_8)
                     if accuracy > 95:
+                        cv2.putText(live_video, f"Accuracy: {accuracy:.2f}%", (30, 40), cv2.FONT_HERSHEY_SIMPLEX,1, (0,128,0),4, cv2.LINE_AA)
                         pass_count += 1
                         return True
+                    else:
+                        cv2.putText(live_video, f"Accuracy: {accuracy:.2f}%", (30, 40), cv2.FONT_HERSHEY_SIMPLEX,1, (0,0,0),4, cv2.LINE_AA)       
+                else:
+                    cv2.putText(live_video, f"Accuracy: {0}%", (30, 40), cv2.FONT_HERSHEY_SIMPLEX,1, (0,0,0),4, cv2.LINE_AA)
     return False
 
 # New Streamlit app to display webcam feed

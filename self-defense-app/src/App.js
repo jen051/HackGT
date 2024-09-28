@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter as Router, Route, Routes, Link } from "react-router-dom";
 import FightingStance from "./FightingStance";
+import Punch from "./Punch"
 
 function App() {
     return (
@@ -23,6 +24,22 @@ function App() {
                     <Route
                         path="/fighting-stance"
                         element={<FightingStance />}
+                    />
+                    <Route
+                        path="/"
+                        element={
+                            <div>
+                                <Link to="/punch">
+                                    <button>
+                                        Start Punching Practice
+                                    </button>
+                                </Link>
+                            </div>
+                        }
+                    />
+                    <Route
+                        path="/punch"
+                        element={<Punch />}
                     />
                 </Routes>
             </div>
