@@ -4,10 +4,10 @@ const FightingStance = () => {
     return (
         <div>
             <h2>Fighting Stance Practice</h2>
-            <img
-                src="http://localhost:8000/fighting-stance"
-                alt="Webcam feed"
-                style={{ width: "640px", height: "480px" }}
+            <iframe
+                src="http://localhost:8501"
+                title="Webcam feed"
+                style={{ width: "640px", height: "480px", border: "none" }}
             />
         </div>
     );
