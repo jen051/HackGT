@@ -45,7 +45,13 @@ def detect_pose_live():
                 # draw skeleton on the frame
                 mp_drawing.draw_landmarks(frame, pose.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).pose_landmarks, mp_pose.POSE_CONNECTIONS)
             # display the frame
-            cv2.imshow('Output', frame)
+            # cv2.imshow('Output', frame)
+            _, jpeg = cv2.imencode('.jpg', frame)
+            frame_data = jpeg.tobytes()
+
+            # Yield the frame as part of an HTTP response (MJPEG stream)
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n')
             
         except Exception as e:
             print(f"Error: {e}")
@@ -166,28 +172,6 @@ def practice_loop(live_video, pose, mp_pose, mp_drawing, pass_count):
                         return True
     return False
 
-def generate_video_stream():
-    cap = cv2.VideoCapture(0)  # Open the webcam
-
-    if not cap.isOpened():
-        return
-
-    while True:
-        ret, frame = cap.read()
-
-        if not ret:
-            break
-        
-        # Encode the frame as JPEG
-        _, buffer = cv2.imencode('.jpg', frame)
-        frame_data = buffer.tobytes()
-
-        # Yield the frame as part of an HTTP response (MJPEG stream)
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n')
-
-    cap.release()
-
 @app.on_event("startup")
 def startup_event():
     timer_buffer(1)
@@ -200,13 +184,9 @@ def root():
 
 @app.api_route("/fighting-stance", methods=["GET", "POST"])
 def fighting_stance():
-    detect_pose_live()
-    return {"message": "Pose detection completed."}
-
-@app.get("/video_feed")
-def video_feed():
-    return Response(generate_video_stream(),
+    return Response(detect_pose_live(),
                     media_type='multipart/x-mixed-replace; boundary=frame')
+
 
 if __name__ == '__main__':
     uvicorn.run(app, host="0.0.0.0", port=8000)

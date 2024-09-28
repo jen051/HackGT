@@ -5,7 +5,7 @@ const FightingStance = () => {
         <div>
             <h2>Fighting Stance Practice</h2>
             <img
-                src="http://localhost:8000/video_feed"
+                src="http://localhost:8000/fighting-stance"
                 alt="Webcam feed"
                 style={{ width: "640px", height: "480px" }}
             />
